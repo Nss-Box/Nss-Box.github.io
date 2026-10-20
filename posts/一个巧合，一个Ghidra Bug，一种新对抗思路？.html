@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src * data:; font-src 'self'; form-action 'none'; base-uri 'none'; frame-src https://giscus.app; script-src 'sha256-BF9UcI4X/QkjQVJC5W12DbNKfXcRncAnx9bS8YfwP2M='">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2032%2032%27%3E%3Crect%20width%3D%2732%27%20height%3D%2732%27%20fill%3D%27%230A0B11%27/%3E%3Ctext%20x%3D%2716%27%20y%3D%2721.6%27%20text-anchor%3D%27middle%27%20font-size%3D%2716%27%20fill%3D%27%2393ffd7%27%20font-family%3D%27monospace%27%3EBox%3C/text%3E%3C/svg%3E">
+<link rel="alternate" type="application/rss+xml" title="RSS" href="../rss.xml">
+<title>Nss.Box ~ 一个巧合，一个Ghidra Bug，一种新对抗思路？</title>
+<style>
+@font-face { font-family: "unifont"; src: url("../font/unifont.woff") format("woff"); }
+html { background: #0A0B11; }
+body {
+  color: #FEFEFE; background: #0A0B11;
+  margin: 0; padding: 1.2em 2ch 3em 2ch;
+  font-family: "unifont", "Lucida Console", Monaco, monospace;
+  font-size: 16px; line-height: 1.4;
+  -webkit-text-size-adjust: 100%;
+}
+a { color: #93ffd7; text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: #93ffd7; color: #0A0B11; }
+.page { max-width: 100%; }
+pre { font-family: inherit; margin: 0; }
+/* 行高必须严格 1.0，│ ─ █ 等字符才能跨行无缝拼接（与 tmp.0ut 一致） */
+pre.logo { line-height: 1.0; margin-bottom: 1.6em; overflow-x: auto; }
+pre.logo.float { float: right; margin: 0 0 1em 2ch; max-width: 100%; }
+.content { white-space: pre-wrap; overflow-wrap: break-word; max-width: 100ch; }
+.dim { color: #7d8598; }
+.mint { color: #93ffd7; }
+.cursor { animation: blink 1.2s steps(1) infinite; color: #93ffd7; }
+@keyframes blink { 50% { opacity: 0; } }
+pre.box { white-space: pre; overflow-x: auto; line-height: 1.0; }
+article { max-width: 100ch; overflow: hidden; }
+article p { margin: 0 0 1.15em; white-space: pre-wrap; overflow-wrap: break-word; }
+h1, h2, h3, h4, h5, h6 {
+  font-size: 1em; font-weight: normal;
+  margin: 1.7em 0 0.9em; line-height: 1.4;
+}
+h1 { border-bottom: 1px solid #303548; padding-bottom: 0.5em; }
+h2 { color: #93ffd7; }
+h2::before { content: "~ "; }
+h3::before { content: "» "; color: #93ffd7; }
+h4::before { content: "  # "; color: #7d8598; }
+h5::before { content: "  · "; color: #7d8598; }
+h6::before { content: "  - "; color: #7d8598; }
+blockquote {
+  margin: 0 0 1.15em; padding: 0.1em 0 0.1em 1ch;
+  border-left: 2px solid #93ffd7; color: #a9b0c0;
+}
+blockquote p { margin: 0; }
+code {
+  font-family: inherit; background: #161927; color: #c9f7e3;
+  padding: 0.05em 0.35em;
+}
+.codebox { border: 1px solid #262b3d; background: #0e1120; margin: 0 0 1.2em; }
+.codebox .lang { display: block; color: #93ffd7; border-bottom: 1px solid #262b3d;
+  padding: 0.2em 1ch; }
+.codebox pre { padding: 0.7em 1ch; overflow-x: auto; line-height: 1.35;
+  white-space: pre; font-size: 15px; }
+.codebox code { background: none; color: #dfe3ee; padding: 0; }
+table { border-collapse: collapse; margin: 0 0 1.2em; }
+th, td { border: 1px solid #262b3d; padding: 0.15em 1ch; }
+th { color: #93ffd7; background: #10131f; }
+hr { border: 0; border-top: 1px dashed #303548; margin: 1.6em 0; }
+ul, ol { margin: 0 0 1.15em; padding-left: 2ch; }
+li { margin: 0.15em 0; }
+ul { list-style: none; }
+ul > li::before { content: "- "; color: #93ffd7; margin-left: -2ch; padding-right: 2ch; }
+.imgwrap { display: block; margin: 0 0 1.2em; }
+.imgwrap img { display: block; max-width: 100%; }
+.imgcap { display: block; color: #7d8598; margin-top: 0.3em; }
+.comments { max-width: 100ch; margin-top: 2.5em; }
+.comment { border: 1px solid #262b3d; background: #0e1120;
+  padding: 0.5em 1ch 0.2em; margin-bottom: 0.9em; }
+.chead { color: #7d8598; margin-bottom: 0.4em; }
+.cname { color: #93ffd7; }
+.cbody p { margin: 0 0 0.7em; }
+.cbody > :last-child { margin-bottom: 0.5em; }
+.cfoot { margin-top: 1em; }
+/* 留言表单：纯 HTML 零 JS，样式做成终端问答的样子 */
+.cform { border: 1px solid #262b3d; background: #0e1120;
+  padding: 0.7em 1ch; margin-top: 0.4em; }
+.cform label { display: block; color: #93ffd7; margin-bottom: 0.25em; }
+.cform input[type="text"], .cform textarea {
+  display: block; width: 100%; box-sizing: border-box;
+  background: #0A0B11; color: #FEFEFE;
+  border: 1px solid #262b3d; font: inherit; font-size: 15px;
+  padding: 0.3em 0.6ch; margin-bottom: 0.8em;
+}
+.cform input:focus, .cform textarea:focus { outline: none; border-color: #93ffd7; }
+.cform button {
+  background: #0A0B11; color: #93ffd7; border: 1px solid #93ffd7;
+  font: inherit; padding: 0.25em 1.5ch; cursor: pointer;
+}
+.cform button:hover { background: #93ffd7; color: #0A0B11; }
+.hp { position: absolute; left: -9999px; }
+/* giscus 直评 iframe：与本站配色一致的皮肤在构建时生成 */
+.giscusbox { margin-top: 0.4em; }
+.giscusbox iframe { display: block; width: 100%; border: 1px solid #262b3d;
+  background: #0e1120; }
+footer { margin-top: 3em; white-space: pre-wrap; color: #7d8598; clear: both; }
+/* 计数徽章：固定视口右下角，line-height 0 消除内联空隙 */
+.pvbox { position: fixed; right: 1ch; bottom: 0.5em; z-index: 9; line-height: 0; }
+nav.crumbs { margin-bottom: 1.5em; }
+@media (max-width: 640px) { body { font-size: 15px; } }
+</style>
+</head>
+<body>
+<div class="page">
+<pre class="logo float">┌──────────────────────────┐
+│ █   █ ▄████ ▄████        │
+│ ██  █ █     █            │
+│ █ █ █ ▀███▄ ▀███▄        │
+│ █  ██     █     █  ▄     │
+│ █   █ ████▀ ████▀        │
+│                    ████▄ │
+│                    █   █ │
+│                    ████▀ │
+│                    █   █ │
+│                    ████▀ │
+│                    ▄▄▄▄▄ │
+│                    █   █ │
+│                    █   █ │
+│                    █   █ │
+│                    ▀▀▀▀▀ │
+│                    █   █ │
+│                     █ █  │
+│                      █   │
+│                     █ █  │
+│                    █   █ │
+└──────────────────────────┘</pre>
+<nav class="crumbs content"><span class="mint">~</span> <a href="../">index</a> · <a href="../archive.html">archive</a> · <a href="../about.html">about</a></nav>
+<article>
+<h1>一个巧合，一个Ghidra Bug，一种新对抗思路？</h1>
+<p class="meta"><span class="mint">~</span> <span class="dim">2026-10-20</span></p>
+<p>在日常用AI挖掘漏洞中对一个MIPS架构固件使用Ghidra遇到了一个问题导致Ghidra超长时间分析进入了互锁状态，由于使用的无头mcp，运行了很长时间我才发现异常。这让我思考在现在Ai时代大多静态分析全部失效的情况下，针对静态分析的对抗是否能够转移到对分析工具的对抗？可惜的是我偶然发现的样本只有在MIPS架构才能实现，也只能针对Ghidra，只能延长IDA分析时间不能导致IDA进行互锁状态，在以前显然这种思路完全是成本不对等，需要大量的人工成本才能实现，但伴随着一次蓝队的Issue报告可能就会直接就失效，但是现在有AI的辅助下是否能够实现跨架构针对多种工具的对抗？Ai挖漏洞的能力有目共睹，最大的成本就是时间而已。</p>
+<h2>原理解析</h2>
+<p>我针对当时的情况实现了能够稳定复现当时情况的样本。接下来使用这个样本进行原理分析。</p>
+<h3>Ghidra的两种机制</h3>
+<p>Ghidra对恢复函数有两种机制：</p>
+<ul><li>流：从入口出发跟踪执行流（顺序执行+条件分支+无条件跳转），根据这个来划分函数区域确定函数体</li><li>调用：每看到一条jal，就把这里当作是一个函数的开头的候补</li></ul>
+<p><a href="https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/Base/src/main/java/ghidra/app/plugin/core/analysis/AutoAnalysisManager.java" rel="noopener noreferrer">Ghidra的双机制</a></p>
+<p>最后会交给CreateFunctionCmd处理。但其实Ghidra一直对这一块做的不是很好，比如有时候会把一个跳转识别成一个函数。<a href="https://ghidra.re/ghidra_docs/api/ghidra/app/cmd/function/CreateFunctionCmd.html" rel="noopener noreferrer">CreateFunctionCmd</a></p>
+<p>双机制互斥，不能有一个字节同属于两个机制 <a href="https://ghidra.re/ghidra_docs/api/ghidra/program/model/block/MultEntSubModel.html" rel="noopener noreferrer">MultEntSubModel</a></p>
+<p>修复措施，每次修复都会调用repairFunctions()，repairFunctions()会调用CreateFunctionCmd重建函数，而且没有设置上限 <a href="https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/Base/src/main/java/ghidra/app/plugin/core/clear/ClearFlowAndRepairCmd.java" rel="noopener noreferrer">ClearFlowAndRepairCmd</a></p>
+<h3>Mips的延迟槽机制</h3>
+<p>简略的说就是“<strong>位于分支或跳转指令之后的那条指令，会在跳转真正生效之前被优先执行</strong>。”</p>
+<p>这是为了加速运行，因为跳转要涉及计算需要时间。当然是有一定限制的，不管是是否执行延迟槽指令还是延迟槽执行什么指令。</p>
+<h2>分析</h2>
+<p><span class="imgwrap"><img src="../images/3_一个巧合，一个Ghidra Bug，一种新对抗思路？_image.png" alt=""></span></p>
+<h3>正常：</h3>
+<div class="codebox"><span class="lang">┌─</span><pre><code>mipsel-linux-gnu-objdump -D -b binary -m mips:isa32 -EB --adjust-vma=0x400000 --start-address=0x68e908 --stop-address=0x68e928 /home/qwe/Desktop/10.15/research/demo-runnable-N3000.elf</code></pre></div>
+<p><span class="imgwrap"><img src="../images/7_一个巧合，一个Ghidra Bug，一种新对抗思路？_image.png" alt=""></span></p>
+<p>前一个函数体结尾</p>
+<div class="codebox"><span class="lang">┌─</span><pre><code>  68e908:	03e00008 	jr	ra
+  68e90c:	00000000 	nop
+</code></pre></div>
+<p>后一个函数开始</p>
+<div class="codebox"><span class="lang">┌─</span><pre><code>  68e910:	3c0280a1 	lui	v0,0x80a1
+  68e914:	2442ee30 	addiu	v0,v0,-4560
+  68e918:	ac62ced0 	sw	v0,-12592(v1)
+  68e91c:	03e00008 	jr	ra
+</code></pre></div>
+<h3>异常：</h3>
+<p>根据日志找到报错地址0x68ac30</p>
+<div class="codebox"><span class="lang">┌─</span><pre><code>mipsel-linux-gnu-objdump -D -b binary -m mips:isa32 -EB --adjust-vma=0x400000 --start-address=0x68ab30 --stop-address=0x68acf8 /home/qwe/Desktop/10.15/research/demo-runnable-N3000.elf | tail -n +8</code></pre></div>
+<p><span class="imgwrap"><img src="../images/一个巧合，一个Ghidra Bug，一种新对抗思路？_image.png" alt=""></span></p>
+<p>下面代码块中的是完整的68aa50函数体</p>
+<div class="codebox"><span class="lang">┌─</span><pre><code>  68aa50:	27bdffb8 	addiu	sp,sp,-72
+  68aa54:	8fa30058 	lw	v1,88(sp)
+  68aa58:	afb20028 	sw	s2,40(sp)
+  68aa5c:	afb60038 	sw	s6,56(sp)
+  68aa60:	000317c2 	srl	v0,v1,0x1f
+  68aa64:	00431021 	addu	v0,v0,v1
+  68aa68:	00029043 	sra	s2,v0,0x1
+  68aa6c:	0012b080 	sll	s6,s2,0x2
+  68aa70:	afb40030 	sw	s4,48(sp)
+  68aa74:	afb3002c 	sw	s3,44(sp)
+  68aa78:	00a0a021 	move	s4,a1
+  68aa7c:	00b69821 	addu	s3,a1,s6
+  68aa80:	afb7003c 	sw	s7,60(sp)
+  68aa84:	afb50034 	sw	s5,52(sp)
+  68aa88:	00c0b821 	move	s7,a2
+  68aa8c:	02602821 	move	a1,s3
+  68aa90:	02403021 	move	a2,s2
+  68aa94:	0080a821 	move	s5,a0
+  68aa98:	02802021 	move	a0,s4
+  68aa9c:	afbf0044 	sw	ra,68(sp)
+  68aaa0:	afb10024 	sw	s1,36(sp)
+  68aaa4:	afb00020 	sw	s0,32(sp)
+  68aaa8:	afa70054 	sw	a3,84(sp)
+  68aaac:	afbe0040 	sw	s8,64(sp)
+  68aab0:	0c1a997a 	jal	0x6a65e8
+  68aab4:	02f68821 	addu	s1,s7,s6
+  68aab8:	00408021 	move	s0,v0
+  68aabc:	02202021 	move	a0,s1
+  68aac0:	02e02821 	move	a1,s7
+  68aac4:	0c1a997a 	jal	0x6a65e8
+  68aac8:	02403021 	move	a2,s2
+  68aacc:	00101840 	sll	v1,s0,0x1
+  68aad0:	00701821 	addu	v1,v1,s0
+  68aad4:	00621821 	addu	v1,v1,v0
+  68aad8:	2402fffe 	li	v0,-2
+  68aadc:	106200fa 	beq	v1,v0,0x68aec8
+  68aae0:	2862ffff 	slti	v0,v1,-1
+  68aae4:	14400084 	bnez	v0,0x68acf8
+  68aae8:	2402fffc 	li	v0,-4
+  68aaec:	24020002 	li	v0,2
+  68aaf0:	106200e8 	beq	v1,v0,0x68ae94
+  68aaf4:	24020004 	li	v0,4
+  68aaf8:	106200da 	beq	v1,v0,0x68ae64
+  68aafc:	02802821 	move	a1,s4
+  68ab00:	02b6f021 	addu	s8,s5,s6
+  68ab04:	0000b821 	move	s7,zero
+  68ab08:	24020008 	li	v0,8
+  68ab0c:	1242008a 	beq	s2,v0,0x68ad38
+  68ab10:	8fa4005c 	lw	a0,92(sp)
+  68ab14:	8fa20058 	lw	v0,88(sp)
+  68ab18:	8fa3005c 	lw	v1,92(sp)
+  68ab1c:	02a02821 	move	a1,s5
+  68ab20:	00022080 	sll	a0,v0,0x2
+  68ab24:	00648021 	addu	s0,v1,a0
+  68ab28:	03c03021 	move	a2,s8
+  68ab2c:	00602021 	move	a0,v1
+  68ab30:	02403821 	move	a3,s2
+  68ab34:	afa00010 	sw	zero,16(sp)
+  68ab38:	afa00014 	sw	zero,20(sp)
+  68ab3c:	0c1aa268 	jal	0x6a89a0
+  68ab40:	afb00018 	sw	s0,24(sp)
+  68ab44:	02602821 	move	a1,s3
+  68ab48:	02203021 	move	a2,s1
+  68ab4c:	02a02021 	move	a0,s5
+  68ab50:	02403821 	move	a3,s2
+  68ab54:	afa00010 	sw	zero,16(sp)
+  68ab58:	afa00014 	sw	zero,20(sp)
+  68ab5c:	0c1aa268 	jal	0x6a89a0
+  68ab60:	afb00018 	sw	s0,24(sp)
+  68ab64:	8fa20054 	lw	v0,84(sp)
+  68ab68:	10400081 	beqz	v0,0x68ad70
+  68ab6c:	8fa30058 	lw	v1,88(sp)
+  68ab70:	8fa30058 	lw	v1,88(sp)
+  68ab74:	8fa60054 	lw	a2,84(sp)
+  68ab78:	02a02821 	move	a1,s5
+  68ab7c:	02431021 	addu	v0,s2,v1
+  68ab80:	8fa3005c 	lw	v1,92(sp)
+  68ab84:	00021080 	sll	v0,v0,0x2
+  68ab88:	02403821 	move	a3,s2
+  68ab8c:	00628821 	addu	s1,v1,v0
+  68ab90:	0c1ba7e5 	jal	0x6e9f94
+  68ab94:	02202021 	move	a0,s1
+  68ab98:	0220a021 	move	s4,s1
+  68ab9c:	12e0007b 	beqz	s7,0x68ad8c
+  68aba0:	02202821 	move	a1,s1
+  68aba4:	8fa6005c 	lw	a2,92(sp)
+  68aba8:	02002021 	move	a0,s0
+  68abac:	0c1ba82d 	jal	0x6ea0b4
+  68abb0:	02403821 	move	a3,s2
+  68abb4:	8fa20054 	lw	v0,84(sp)
+  68abb8:	1040007b 	beqz	v0,0x68ada8
+  68abbc:	02202021 	move	a0,s1
+  68abc0:	00562821 	addu	a1,v0,s6
+  68abc4:	02003021 	move	a2,s0
+  68abc8:	0c1ba82d 	jal	0x6ea0b4
+  68abcc:	02403821 	move	a3,s2
+  68abd0:	8fa60054 	lw	a2,84(sp)
+  68abd4:	02002021 	move	a0,s0
+  68abd8:	02202821 	move	a1,s1
+  68abdc:	02403821 	move	a3,s2
+  68abe0:	0c1ba7e5 	jal	0x6e9f94
+  68abe4:	0200a021 	move	s4,s0
+  68abe8:	02802821 	move	a1,s4
+  68abec:	02002021 	move	a0,s0
+  68abf0:	02a03021 	move	a2,s5
+  68abf4:	02403821 	move	a3,s2
+  68abf8:	0c1ba7e5 	jal	0x6e9f94
+  68abfc:	00409821 	move	s3,v0
+  68ac00:	12e0007d 	beqz	s7,0x68adf8
+  68ac04:	00539821 	addu	s3,v0,s3
+  68ac08:	8fa6005c 	lw	a2,92(sp)
+  68ac0c:	02002021 	move	a0,s0
+  68ac10:	02002821 	move	a1,s0
+  68ac14:	0c1ba82d 	jal	0x6ea0b4
+  68ac18:	02403821 	move	a3,s2
+  68ac1c:	02203021 	move	a2,s1
+  68ac20:	02a02021 	move	a0,s5
+  68ac24:	02a02821 	move	a1,s5
+  68ac28:	02403821 	move	a3,s2
+  				68ac2c:	0c1ba7e5 	jal	0x6e9f94
+  				68ac30:	02629823 	subu	s3,s3,v0
+  68ac34:	02a02021 	move	a0,s5
+  68ac38:	02a02821 	move	a1,s5
+  68ac3c:	03c03021 	move	a2,s8
+  68ac40:	02403821 	move	a3,s2
+  68ac44:	0c1ba7e5 	jal	0x6e9f94
+  68ac48:	00408821 	move	s1,v0
+  68ac4c:	8fa3005c 	lw	v1,92(sp)
+  68ac50:	00408021 	move	s0,v0
+  68ac54:	02a02021 	move	a0,s5
+  68ac58:	02a02821 	move	a1,s5
+  68ac5c:	00763021 	addu	a2,v1,s6
+  68ac60:	0c1ba82d 	jal	0x6ea0b4
+  68ac64:	02403821 	move	a3,s2
+  68ac68:	02118021 	addu	s0,s0,s1
+  68ac6c:	02028023 	subu	s0,s0,v0
+  68ac70:	1260000a 	beqz	s3,0x68ac9c
+  68ac74:	00000000 	nop
+  68ac78:	1a6000b4 	blez	s3,0x68af4c
+  68ac7c:	02601821 	move	v1,s3
+  68ac80:	02a02021 	move	a0,s5
+  68ac84:	8c820000 	lw	v0,0(a0)
+  68ac88:	00621021 	addu	v0,v1,v0
+  68ac8c:	0043182b 	sltu	v1,v0,v1
+  68ac90:	ac820000 	sw	v0,0(a0)
+  68ac94:	1460fffb 	bnez	v1,0x68ac84
+  68ac98:	24840004 	addiu	a0,a0,4
+  68ac9c:	1200000b 	beqz	s0,0x68accc
+  68aca0:	8fbf0044 	lw	ra,68(sp)
+  68aca4:	1a000095 	blez	s0,0x68aefc
+  68aca8:	00000000 	nop
+  68acac:	03c02021 	move	a0,s8
+  68acb0:	8c820000 	lw	v0,0(a0)
+  68acb4:	02021021 	addu	v0,s0,v0
+  68acb8:	0050802b 	sltu	s0,v0,s0
+  68acbc:	ac820000 	sw	v0,0(a0)
+  68acc0:	1600fffb 	bnez	s0,0x68acb0
+  68acc4:	24840004 	addiu	a0,a0,4
+  68acc8:	8fbf0044 	lw	ra,68(sp)
+  68accc:	8fbe0040 	lw	s8,64(sp)
+  68acd0:	8fb7003c 	lw	s7,60(sp)
+  68acd4:	8fb60038 	lw	s6,56(sp)
+  68acd8:	8fb50034 	lw	s5,52(sp)
+  68acdc:	8fb40030 	lw	s4,48(sp)
+  68ace0:	8fb3002c 	lw	s3,44(sp)
+  68ace4:	8fb20028 	lw	s2,40(sp)
+  68ace8:	8fb10024 	lw	s1,36(sp)
+  68acec:	8fb00020 	lw	s0,32(sp)
+  68acf0:	03e00008 	jr	ra
+  68acf4:	27bd0048 	addiu	sp,sp,72
+</code></pre></div>
+<div class="codebox"><span class="lang">┌─</span><pre><code>68ac2c:	0c1ba7e5 	jal	0x6e9f94
+68ac30:	02629823 	subu	s3,s3,v0</code></pre></div>
+<p>68ac30是<code>jal 0x6e9f94</code>的延迟槽指令，被Ghidra当作是原子化不可分<a href="https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/block/SimpleBlockModel.java" rel="noopener noreferrer">SimpleBlockModel</a><a href="https://ghidra.re/ghidra_docs/api/ghidra/program/model/listing/Instruction.html" rel="noopener noreferrer">Instruction</a>。要么68aa50函数体都包含要不都不包含，显然这里一定是都包含。</p>
+<p>挑选其中一条引用了68ac30的jal指令并且会导致出错的块</p>
+<div class="codebox"><span class="lang">┌─</span><pre><code>mipsel-linux-gnu-objdump -D -b binary -m mips:isa32 -EB --adjust-vma=0x400000 --start-address=0x407150 --stop-address=0x407168 /home/qwe/Desktop/10.15/research/demo-runnable-N3000.elf | tail -n +8</code></pre></div>
+<p><span class="imgwrap"><img src="../images/6_一个巧合，一个Ghidra Bug，一种新对抗思路？_image.png" alt=""></span></p>
+<div class="codebox"><span class="lang">┌─</span><pre><code>  407150:	10600011 	beqz	v1,0x407198
+  407154:	00000000 	nop
+  407158:	0c1a2b0c 	jal	0x68ac30
+  40715c:	00000000 	nop
+  407160:	02228821 	addu	s1,s1,v0
+  407164:	2610003c 	addiu	s0,s0,60
+</code></pre></div>
+<p>因为这段jal前面由条件判断beqz，后面有对V0的立即使用，而使用返回值是真函数调用的签名<a href="https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/Base/src/main/java/ghidra/app/plugin/core/function/FunctionAnalyzer.java" rel="noopener noreferrer">FunctionAnalyzer</a>。0x68ac30 被Ghidra当作是一个完整的函数调用。0x68ac30被当作是函数的开头，这就产生了冲突。</p>
+<h2>一个修复机制产生的放大器</h2>
+<p>可以从日志中看到海量的<a href="https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/Base/src/main/java/ghidra/app/plugin/core/clear/ClearFlowAndRepairCmd.java" rel="noopener noreferrer">ClearFlowAndRepairCmd</a>相关报错</p>
+<p><span class="imgwrap"><img src="../images/2_一个巧合，一个Ghidra Bug，一种新对抗思路？_image.png" alt=""></span><span class="imgwrap"><img src="../images/5_一个巧合，一个Ghidra Bug，一种新对抗思路？_image.png" alt=""></span></p>
+<div class="codebox"><span class="lang">┌─</span><pre><code>11110:WARN  WARNING! Repairing body of function at 004937f4 (ClearFlowAndRepairCmd)  
+11111:ERROR ... function body repair failed due to overlap with another function: 004937f4 (ClearFlowAndRepairCmd)  
+11112:WARN  WARNING! Repairing body of function at 00493810 (ClearFlowAndRepairCmd)  
+11113:ERROR ... function body repair failed due to overlap with another function: 00493810 (ClearFlowAndRepairCmd)  
+11114:WARN  WARNING! Repairing body of function at 004b1b70 (ClearFlowAndRepairCmd)  
+11115:ERROR ... function body repair failed due to overlap with another function: 004b1b70 (ClearFlowAndRepairCmd)  
+11116:WARN  WARNING! Repairing body of function at 004cfb40 (ClearFlowAndRepairCmd)  
+11117:ERROR ... function body repair failed due to overlap with another function: 004cfb40 (ClearFlowAndRepairCmd)  
+11118:WARN  WARNING! Repairing body of function at 004cfb44 (ClearFlowAndRepairCmd)  
+11119:ERROR ... function body repair failed due to overlap with another function: 004cfb44 (ClearFlowAndRepairCmd)  </code></pre></div>
+<p>可以在日志中看到每次尝试进行修复都失败了，原因就是之前说的那种互锁情况导致了日志中99%的日志打印都是这个。</p>
+<h2>结语</h2>
+<p>现在本人对病毒的分析基本都依赖ai了，没招了太好用了23333，我觉得未来大部分人肯定都是使用ai分析病毒，这种机制导致工具卡死会不会成为未来针对ai分析病毒的一种新对抗面？ai对二进制程序的分析依旧强依赖工具，虽然感觉远不如硬编码铭感词等方式好用，限制也更多，但我觉得要更稳定一点，也更适配一点，写shellcode，或者实现一种壳，毕竟ai未来会不会增强对这方面的检查或者能力增强天然能分辨，这谁也不知道，总不能在病毒里硬编码写部小说吧23333。</p>
+<p>同族问题历史Issue:https://github.com/NationalSecurityAgency/ghidra/issues/68</p>
+<p>样本地址：https://github.com/Nss-Box/Ghidra-Bug-demo</p>
+<p>Ghidra版本:12.1.2</p>
+</article>
+<section class="comments">
+<h2>COMMENTS (0)</h2>
+<div class="giscusbox">
+<iframe src="https://giscus.app/zh-CN/widget?origin=https%3A%2F%2Fnss-box.github.io&amp;session=&amp;theme=https%3A%2F%2Fnss-box.github.io%2Fgiscus-theme.css&amp;reactionsEnabled=1&amp;emitMetadata=0&amp;inputPosition=bottom&amp;repo=Nss-Box%2FNss-Box.github.io&amp;repoId=R_kgDOUk8z0A&amp;category=Announcements&amp;categoryId=DIC_kwDOUk8z0M4DGIsO&amp;strict=1&amp;term=%2Fposts%2F%25E4%25B8%2580%25E4%25B8%25AA%25E5%25B7%25A7%25E5%2590%2588%25EF%25BC%258C%25E4%25B8%2580%25E4%25B8%25AAGhidra%2520Bug%25EF%25BC%258C%25E4%25B8%2580%25E7%25A7%258D%25E6%2596%25B0%25E5%25AF%25B9%25E6%258A%2597%25E6%2580%259D%25E8%25B7%25AF%25EF%25BC%259F.html&amp;backLink=https%3A%2F%2Fnss-box.github.io%2Fposts%2F%25E4%25B8%2580%25E4%25B8%25AA%25E5%25B7%25A7%25E5%2590%2588%25EF%25BC%258C%25E4%25B8%2580%25E4%25B8%25AAGhidra%2520Bug%25EF%25BC%258C%25E4%25B8%2580%25E7%25A7%258D%25E6%2596%25B0%25E5%25AF%25B9%25E6%258A%2597%25E6%2580%259D%25E8%25B7%25AF%25EF%25BC%259F.html&amp;description=%E4%B8%80%E4%B8%AA%E5%B7%A7%E5%90%88%EF%BC%8C%E4%B8%80%E4%B8%AAGhidra+Bug%EF%BC%8C%E4%B8%80%E7%A7%8D%E6%96%B0%E5%AF%B9%E6%8A%97%E6%80%9D%E8%B7%AF%EF%BC%9F" title="comments" loading="lazy" width="100%" height="460" frameborder="0"></iframe>
+</div>
+</section>
+<footer># Nss-Box · <a href="https://github.com/Nss-Box">github</a> · <a href="../rss.xml">rss</a> · style inspired by <a href="https://tmpout.sh/">tmp.0ut</a> <span class="cursor">█</span></footer>
+</div>
+<div class="pvbox"><img class="pv" src="https://hitscounter.dev/api/hit?url=https%3A%2F%2Fnss-box.github.io&amp;label=Visitor&amp;icon=github&amp;color=%2393ffd7" alt="pv"></div><script>(function(){var m=location.search.match(/[?&]giscus=([^&]+)/);var t=m?decodeURIComponent(m[1]):'';if(t){try{localStorage.setItem('giscus-session',t)}catch(e){}}else{try{t=localStorage.getItem('giscus-session')||''}catch(e){}}if(!t)return;var f=document.querySelector('.giscusbox iframe');if(f){var u=new URL(f.src);u.searchParams.set('session',t);f.src=u.toString();}if(m)history.replaceState(null,'',location.pathname);})();</script>
+</body>
+</html>
